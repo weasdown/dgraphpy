@@ -1,1 +1,3 @@
-from .dgraph_simple.classes import Endpoint, Query, Mutation
+# Imports for dgraphpy package
+
+from .dgraphpy.classes import Endpoint, Query, Mutation
