@@ -18,11 +18,11 @@ class Endpoint:
 
 
 class GraphQLOperation:
-    def __init__(self, gql_type: str, name: str, return_fields: list, arguments: dict = None):
+    def __init__(self, gql_type: str, return_fields: list, name: str = None, arguments: dict = None):
         """
         Class for GraphQL queries. See https://graphql.org/learn/queries/
         """
-        self.name: str = name
+        self.name: str = name if name is not None else ''
         self.gql_type: str = gql_type
 
         def parse_arguments(args: dict) -> str:
@@ -92,7 +92,7 @@ class Query(GraphQLOperation):
         if not any([query_name.startswith(start) for start in valid_start_words]):
             raise AttributeError(f'Query name must start with one of the following: {valid_start_words}')
         else:
-            super().__init__('query', query_name, return_fields, arguments)
+            super().__init__('query', return_fields, query_name, arguments)
 
 
 class Mutation(GraphQLOperation):
@@ -104,4 +104,11 @@ class Mutation(GraphQLOperation):
         if not any([mutation_name.startswith(start) for start in valid_start_words]):
             raise AttributeError(f'Mutation name must start with one of the following: {valid_start_words}')
         else:
-            super().__init__('mutation', mutation_name, return_fields, arguments)
+            super().__init__('mutation', return_fields, mutation_name, arguments)
+
+
+class SchemaQuery(GraphQLOperation):
+    def __init__(self, return_fields: list, predicates: list[str] = None):
+        predicates: dict = {'pred': predicates}
+        super().__init__('schema', 'schema', return_fields, predicates)
+        pass
