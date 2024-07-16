@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import requests
+import json
 
 
 class Endpoint:
@@ -45,12 +46,45 @@ class Query:
         Class for GraphQL queries. See https://graphql.org/learn/queries/
         """
         self.query_name: str = query_name
-        self.arguments: str = str(', '.join([f'{k}: "{v}"' for (k, v) in arguments.items()])) \
-            if arguments is not None else None
+        self.arguments = ''
+
+        def parse_arguments(args: dict) -> str:
+            """
+            Convert an arguments dictionary into a GraphQL-compatible string.
+
+            :param args: arguments dictionary
+            :type args: dict
+            :return: GraphQL-compatible string
+            :rtype: str
+            """
+
+            gql_args = []
+
+            for k, v in args.items():
+                if isinstance(v, str):
+                    item = str(k) + f': "{str(v)}"'
+                elif isinstance(v, dict):
+                    v_text = parse_arguments(v)
+                    item = str(k) + ': {' + v_text + '}'
+                elif isinstance(v, list):
+                    item = f'{k}: {", ".join(v)}'
+                else:
+                    raise TypeError
+                gql_args.append(item)
+            return ', '.join(gql_args)
+
+        if arguments is not None:
+            self.arguments = parse_arguments(arguments)
+
+            if self.query_name.startswith('query'):
+                self.arguments = 'filter: {' + self.arguments + '}'
+
+            self.arguments = '(' + self.arguments + ')'
+
         self.return_fields: list = return_fields
 
         self.return_fields_text: str = '{' + ",\n".join(return_fields) + '}'
-        self.query_text: str = (f'{{{self.query_name}{"" if self.arguments is None else f"({self.arguments})"} '
+        self.query_text: str = (f'{{{self.query_name}{self.arguments} '
                                 f'{self.return_fields_text}}}')
 
     def post(self, endpoint: Endpoint = Endpoint('localhost:9080')) -> dict:
