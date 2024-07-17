@@ -45,6 +45,10 @@ class Schema:
             self.nullable: bool = nullable
             self.directive: str = directive
 
+            nullable_text: str = "!" if self.nullable else ""
+            directive_text: str = f' @{self.directive}' if self.directive else ''
+            self.text: str = f'{self.name}: {self.attr_type}{nullable_text}{directive_text}'
+
         @staticmethod
         def remove_trailing_comment(text: str) -> str:
             """
@@ -59,13 +63,13 @@ class Schema:
             return text
 
         @classmethod
-        def from_text(cls, text) -> 'Schema.SchemaAttribute':
+        def from_text(cls, text) -> Schema.SchemaAttribute:
             chunks: list[str] = [chunk.strip() for chunk in text.split(':')]
 
-            name: str = chunks[0]
+            name: str = chunks[0].replace(',', '')
 
             attr_details = chunks[1].split('@')
-            attr_type: str = attr_details[0].replace('!', '')
+            attr_type: str = attr_details[0].replace('!', '').replace(',', '').strip()
             can_be_null: bool = False if '!' in chunks[1] else True
 
             if '@' in chunks[1]:
@@ -81,6 +85,10 @@ class Schema:
             self.name: str = name
             self.attributes: list[Schema.SchemaAttribute] = attributes
 
+        def __repr__(self):
+            attrs_text: str = "\n".join([f'\t- {attr.text}' for attr in self.attributes])
+            return f'SchemaType called "{self.name}" with attributes:\n{attrs_text}'
+
         @classmethod
         def from_text(cls, text: str) -> Schema.SchemaType:
             chunks: list[str] = [chunk.strip() for chunk in text.split('\n')
@@ -93,10 +101,14 @@ class Schema:
             schema_type = cls(name, attribute_objs)
             return schema_type
 
-    @dataclass
     class SchemaEnum:
-        name: str
-        options: list[str]
+        def __init__(self, name: str, options: list[str]):
+            self.name: str = name
+            self.options: list[str] = options
+
+        def __repr__(self):
+            options_text: str = "\n".join([f'\t- {option}' for option in self.options])
+            return f'SchemaEnum called "{self.name}" with options:\n{options_text}'
 
         @classmethod
         def from_text(cls, text: str) -> Schema.SchemaEnum:
