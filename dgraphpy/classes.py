@@ -24,7 +24,10 @@ class Server:
         headers = getattr(operation, 'headers', Server.headers)
 
         response = requests.post(url=endpoint_url, data=operation.text, headers=headers)
-        return response.json()
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise RuntimeError(f'HTTP status code was not 200 ({response.status_code})')
 
 
 class Endpoint:
