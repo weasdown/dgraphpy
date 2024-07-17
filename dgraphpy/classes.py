@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dotenv import load_dotenv
+import os
+
 import requests
 import json
 
@@ -18,7 +21,11 @@ class Server:
     def post(self, endpoint_url: str, operation: GraphQLOperation):
         if endpoint_url not in [self.admin_endpoint, self.graphql_endpoint, self.alter_endpoint]:
             raise AttributeError
-        response = requests.post(url=endpoint_url, data=operation.text, headers=Server.headers)
+
+        headers = getattr(operation, 'headers', Server.headers)
+        print(f'headers: {headers}')
+
+        response = requests.post(url=endpoint_url, data=operation.text, headers=headers)
         return response.json()
 
 
@@ -83,6 +90,8 @@ class GraphQLOperation:
         self.text: str = f'{self.gql_type} {self.name} ' + \
                          '{' + self.name + self.arguments + self.return_fields_text + '}'
 
+        self.headers: dict | None = None
+
     def post(self, endpoint: Endpoint = Endpoint('localhost:9080')) -> dict:
         """
         Send this query or mutation to a given endpoint via HTTP POST.
@@ -127,7 +136,12 @@ class SchemaQuery(GraphQLOperation):
         return_fields = [''] if return_fields is None else return_fields
         predicates: dict = {'pred': predicates} if predicates is not None else None
         super().__init__('schema', return_fields, arguments=predicates)
-        self.text = """
-        getGQLSchema{}
-        """
-        # self.text: str = 'schema {' + '\n'.join(return_fields) + '}'
+        self.text = '{ getGQLSchema { generatedSchema } }'
+
+        # self.text: str = 'schema {' + '\n'.join(return_fields) + '}'  # FIXME
+        self.headers: dict = Server.headers
+
+        # Load X-Auth-Token API token from .env in same directory as this file
+        load_dotenv()
+        x_auth_token: str = os.getenv('X_AUTH_TOKEN')
+        self.headers['X-Auth-Token'] = x_auth_token
