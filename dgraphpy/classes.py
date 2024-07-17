@@ -95,6 +95,7 @@ class Query(GraphQLOperation):
             super().__init__('query', return_fields, query_name, arguments)
 
 
+# TODO add upsert ability
 class Mutation(GraphQLOperation):
     def __init__(self, mutation_name: str, return_fields: list, arguments: dict = None):
         """
