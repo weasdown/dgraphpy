@@ -108,7 +108,8 @@ class Mutation(GraphQLOperation):
 
 
 class SchemaQuery(GraphQLOperation):
-    def __init__(self, return_fields: list, predicates: list[str] = None):
-        predicates: dict = {'pred': predicates}
-        super().__init__('schema', 'schema', return_fields, predicates)
-        pass
+    def __init__(self, return_fields: list = None, predicates: list[str] = None):
+        return_fields = [''] if return_fields is None else return_fields
+        predicates: dict = {'pred': predicates} if predicates is not None else None
+        super().__init__('schema', return_fields, arguments=predicates)
+        self.text: str = 'schema {' + '\n'.join(return_fields) + '}'
