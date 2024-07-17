@@ -39,6 +39,22 @@ class Endpoint:
         return response.json()
 
 
+class Schema:
+    def __init__(self, schema_text: str):
+        schema_chunks: list[str] = schema_text.split('#######################')
+        schema_chunks = [chunk.removeprefix('\n\n').removesuffix('\n\n') for chunk in schema_chunks]
+
+        self.text: str = schema_text
+
+        self.input_schema: str = schema_chunks[2]
+        self.extended_definitions: str = schema_chunks[4]
+        self.generated_types: str = schema_chunks[6]
+        self.generated_enums: str = schema_chunks[8]
+        self.generated_inputs: str = schema_chunks[10]
+        self.generated_query: str = schema_chunks[12]
+        self.generated_mutations: str = schema_chunks[14]
+
+
 class GraphQLOperation:
     def __init__(self, gql_type: str, return_fields: list, name: str = None, arguments: dict = None):
         """
