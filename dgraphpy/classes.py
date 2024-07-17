@@ -23,8 +23,6 @@ class Server:
             raise AttributeError
 
         headers = getattr(operation, 'headers', Server.headers)
-        # print(f'data: {operation.text}')
-        # print(f'headers: {headers}')
 
         response = requests.post(url=endpoint_url, data=operation.text, headers=headers)
         return response.json()
@@ -41,18 +39,42 @@ class Endpoint:
 
 class Schema:
     def __init__(self, schema_text: str):
-        schema_chunks: list[str] = schema_text.split('#######################')
-        schema_chunks = [chunk.removeprefix('\n\n').removesuffix('\n\n') for chunk in schema_chunks]
-
         self.text: str = schema_text
 
-        self.input_schema: str = schema_chunks[2]
-        self.extended_definitions: str = schema_chunks[4]
-        self.generated_types: str = schema_chunks[6]
-        self.generated_enums: str = schema_chunks[8]
-        self.generated_inputs: str = schema_chunks[10]
-        self.generated_query: str = schema_chunks[12]
-        self.generated_mutations: str = schema_chunks[14]
+        schema_chunks = schema_text.split('#######################') \
+            if '#######################' in schema_text else None
+        schema_chunks = [chunk.removeprefix('\n\n').removesuffix('\n\n') for chunk in schema_chunks] \
+            if schema_chunks is not None else None
+
+        attrs = ['input_schema', 'extended_definitions', 'generated_types', 'generated_enums', 'generated_inputs',
+                 'generated_query', 'generated_mutations']
+        for index, attr in enumerate(attrs):
+            # Set attributes for schema chunks. Only valid if text built by generatedSchema query (not just schema).
+            # Example: self.extended_definitions = schema_chunks[4]
+            setattr(self, attr, schema_chunks[(index + 1) * 2] if schema_chunks is not None else None)
+
+    @classmethod
+    def from_SchemaQuery(cls, query: SchemaQuery, server: Server) -> 'Schema':
+        """
+        Build a Schema object from a SchemaQuery that pulls schema information from the server.
+
+        :param query: Query specifying which details of the schema should be retrieved from the server.
+        :type query: SchemaQuery
+        :param server: Server from which to get schema information.
+        :type server: Server
+        :return: Schema object
+        :rtype: Schema
+        """
+        response: dict = server.post(server.admin_endpoint, query)
+        schema_data: dict = response['data']['getGQLSchema']
+
+        # Pull schema text from response dict. Dict key varies depending on query used to get schema data,
+        # so use query.text to determine corrected key to use
+        schema_text: str = schema_data.get('generatedSchema').replace('\u2010', '-') if 'generatedSchema' in query.text\
+            else schema_data.get('schema')
+
+        schema = cls(schema_text)  # make a Schema obejct from the schema_text
+        return schema
 
 
 class GraphQLOperation:
@@ -149,11 +171,12 @@ class Mutation(GraphQLOperation):
 
 
 class SchemaQuery(GraphQLOperation):
-    def __init__(self, return_fields: list = None, predicates: list[str] = None):
+    def __init__(self, return_fields: list = None, predicates: list[str] = None, generated_schema: bool = False):
         return_fields = [''] if return_fields is None else return_fields
         predicates: dict = {'pred': predicates} if predicates is not None else None
         super().__init__('schema', return_fields, arguments=predicates)
-        self.text = '{ getGQLSchema { generatedSchema } }'
+
+        self.text = '{ getGQLSchema { ' + ('generatedSchema' if generated_schema else 'schema') + ' } }'
 
         # self.text: str = 'schema {' + '\n'.join(return_fields) + '}'  # FIXME
         self.headers: dict = Server.headers
