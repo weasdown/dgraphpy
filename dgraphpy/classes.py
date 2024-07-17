@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dotenv import load_dotenv
 import os
+from dataclasses import dataclass
 
 import requests
-import json
 
 
 class Server:
@@ -38,6 +38,79 @@ class Endpoint:
 
 
 class Schema:
+    class SchemaAttribute:
+        def __init__(self, name: str, attr_type: str, nullable: bool = True, directive: str = None):
+            self.name: str = name
+            self.attr_type: str = attr_type
+            self.nullable: bool = nullable
+            self.directive: str = directive
+
+        @staticmethod
+        def remove_trailing_comment(text: str) -> str:
+            """
+            Remove comment and trailing whitespace from a line of text.
+
+            :param text: A line of text.
+            :type text: str
+            :return: The text with comment and trailing whitespace removed
+            :rtype: str
+            """
+            text = text.split('#')[0].rstrip()
+            return text
+
+        @classmethod
+        def from_text(cls, text) -> 'Schema.SchemaAttribute':
+            chunks: list[str] = [chunk.strip() for chunk in text.split(':')]
+
+            name: str = chunks[0]
+
+            attr_details = chunks[1].split('@')
+            attr_type: str = attr_details[0].replace('!', '')
+            can_be_null: bool = False if '!' in chunks[1] else True
+
+            if '@' in chunks[1]:
+                directive: str | None = Schema.SchemaAttribute.remove_trailing_comment(text.split('@')[1])
+            else:
+                directive = None
+
+            attr: Schema.SchemaAttribute = cls(name, attr_type, can_be_null, directive)
+            return attr
+
+    class SchemaType:
+        def __init__(self, name: str, attributes: list[Schema.SchemaAttribute]):
+            self.name: str = name
+            self.attributes: list[Schema.SchemaAttribute] = attributes
+
+        @classmethod
+        def from_text(cls, text: str) -> Schema.SchemaType:
+            chunks: list[str] = [chunk.strip() for chunk in text.split('\n')
+                                 if not (chunk == '' or chunk.strip().startswith('#'))]
+
+            name: str = chunks[0].replace('type ', '').split(' ')[0]  # remove "type " then get first word
+            attributes = chunks[1:]
+            attribute_objs: list[Schema.SchemaAttribute] = [Schema.SchemaAttribute.from_text(line) for line in attributes]
+
+            schema_type = cls(name, attribute_objs)
+            return schema_type
+
+    @dataclass
+    class SchemaEnum:
+        name: str
+        options: list[str]
+
+        @classmethod
+        def from_text(cls, text: str) -> Schema.SchemaEnum:
+            item_chunks: list[str] = [chunk.strip() for chunk in text.split('{')]
+            item_chunks = Schema.remove_comment_lines(item_chunks, True)
+
+            name = item_chunks[0].replace('enum ', '')  # just get enum's name
+
+            # split options chunk into lines, remove } and remove whitespace at start or end of option
+            options: list[str] = [chunk.strip() for chunk in item_chunks[1].split('\n') if chunk != '}']
+
+            enum: Schema.SchemaEnum = cls(name, options)
+            return enum
+
     def __init__(self, schema_text: str):
         self.text: str = schema_text
 
@@ -52,6 +125,35 @@ class Schema:
             # Set attributes for schema chunks. Only valid if text built by generatedSchema query (not just schema).
             # Example: self.extended_definitions = schema_chunks[4]
             setattr(self, attr, schema_chunks[(index + 1) * 2] if schema_chunks is not None else None)
+
+        # if schema made by "schema" query, returned text is equivalent to input_schema from a "generatedSchema" query.
+        if schema_chunks is None:
+            self.input_schema: str = self.text
+
+        # Attributes for storing data about the data in the schema text
+        self.types = self.get_types()
+
+    def get_types(self) -> list:
+        """
+        Get a list of the types within the schema.
+
+        :return: List of SchemaType objects representing each type entry in the schema.
+        :rtype: SchemaType
+        """
+        types: list = self.input_schema.split('}\n\n')
+        types = self.remove_comment_lines(types)
+
+        type_objs: list[Schema.SchemaType | Schema.SchemaEnum] = []
+        for item in types:
+            if item.startswith('type'):
+                type_objs.append(Schema.SchemaType.from_text(item))
+            elif item.startswith('enum'):
+                type_objs.append(Schema.SchemaEnum.from_text(item))
+            else:
+                raise AttributeError(f'Item in schema not recognised as type or enum:\n{item}')
+
+        self.types: list[Schema.SchemaType | Schema.SchemaEnum] = type_objs  # update schema's classes attribute
+        return self.types
 
     @classmethod
     def from_SchemaQuery(cls, query: SchemaQuery, server: Server) -> 'Schema':
@@ -75,6 +177,13 @@ class Schema:
 
         schema = cls(schema_text)  # make a Schema obejct from the schema_text
         return schema
+
+    @staticmethod
+    def remove_comment_lines(text_lines: list[str], remove_blank_lines: bool = False) -> list[str]:
+        new_lines: list[str] = [item for item in text_lines if not item.startswith('#')]
+        if remove_blank_lines:
+            new_lines = [line for line in new_lines if line != '']
+        return new_lines
 
 
 class GraphQLOperation:
