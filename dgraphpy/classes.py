@@ -25,6 +25,11 @@ class Server:
 
         response = requests.post(url=endpoint_url, data=operation.text, headers=headers)
         if response.status_code == 200:
+            resp_json = response.json()
+            if 'errors' in list(resp_json.keys()):
+                errors: list[dict] = resp_json["errors"]
+                all_errors_text: str = "\n".join([error["message"] for error in errors])
+                raise RuntimeError(f'Error raised by server: {all_errors_text}')
             return response.json()
         else:
             raise RuntimeError(f'HTTP status code was not 200 ({response.status_code})')
