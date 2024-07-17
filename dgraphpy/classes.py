@@ -18,12 +18,13 @@ class Server:
         self.graphql_endpoint: str = f'{self.url}/graphql'
         self.alter_endpoint: str = f'{self.url}/alter'
 
-    def post(self, endpoint_url: str, operation: GraphQLOperation):
+    def post(self, endpoint_url: str, operation: GraphQLOperation) -> dict:
         if endpoint_url not in [self.admin_endpoint, self.graphql_endpoint, self.alter_endpoint]:
             raise AttributeError
 
         headers = getattr(operation, 'headers', Server.headers)
-        print(f'headers: {headers}')
+        # print(f'data: {operation.text}')
+        # print(f'headers: {headers}')
 
         response = requests.post(url=endpoint_url, data=operation.text, headers=headers)
         return response.json()
