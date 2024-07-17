@@ -4,16 +4,30 @@ import requests
 import json
 
 
-class Endpoint:
+class Server:
     headers: dict = {
         "Content-Type": "application/graphql",
     }
 
     def __init__(self, url: str):
         self.url: str = url
+        self.admin_endpoint: str = f'{self.url}/admin'
+        self.graphql_endpoint: str = f'{self.url}/graphql'
+        self.alter_endpoint: str = f'{self.url}/alter'
+
+    def post(self, endpoint_url: str, operation: GraphQLOperation):
+        if endpoint_url not in [self.admin_endpoint, self.graphql_endpoint, self.alter_endpoint]:
+            raise AttributeError
+        response = requests.post(url=endpoint_url, data=operation.text, headers=Server.headers)
+        return response.json()
+
+
+class Endpoint:
+    def __init__(self, url: str):
+        self.url: str = url
 
     def post(self, operation: GraphQLOperation):
-        response = requests.post(url=self.url, data=operation.text, headers=Endpoint.headers)
+        response = requests.post(url=self.url, data=operation.text, headers=Server.headers)
         return response.json()
 
 
@@ -113,4 +127,7 @@ class SchemaQuery(GraphQLOperation):
         return_fields = [''] if return_fields is None else return_fields
         predicates: dict = {'pred': predicates} if predicates is not None else None
         super().__init__('schema', return_fields, arguments=predicates)
-        self.text: str = 'schema {' + '\n'.join(return_fields) + '}'
+        self.text = """
+        getGQLSchema{}
+        """
+        # self.text: str = 'schema {' + '\n'.join(return_fields) + '}'
