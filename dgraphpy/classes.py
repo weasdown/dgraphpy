@@ -102,8 +102,9 @@ class Schema:
                                  if not (chunk == '' or chunk.strip().startswith('#'))]
 
             name: str = chunks[0].replace('type ', '').split(' ')[0]  # remove "type " then get first word
-            attributes = chunks[1:]
-            attribute_objs: list[Schema.SchemaAttribute] = [Schema.SchemaAttribute.from_text(line) for line in attributes]
+            attributes = [chunk for chunk in chunks[1:] if chunk not in ['{', '}']]
+            attribute_objs: list[Schema.SchemaAttribute] = [Schema.SchemaAttribute.from_text(line)
+                                                            for line in attributes]
 
             schema_type = cls(name, attribute_objs)
             return schema_type
@@ -159,7 +160,7 @@ class Schema:
         :return: List of SchemaType objects representing each type entry in the schema.
         :rtype: SchemaType
         """
-        types: list = self.input_schema.split('}\n\n')
+        types: list = self.input_schema.split('}\n')
         types = self.remove_comment_lines(types)
 
         type_objs: list[Schema.SchemaType | Schema.SchemaEnum] = []
