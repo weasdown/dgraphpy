@@ -12,6 +12,8 @@ class Server:
     }
 
     def __init__(self, url: str):
+        if url is None:
+            raise AttributeError('Server url attribute cannot be None')
         self.url: str = url
         self.admin_endpoint: str = f'{self.url}/admin'
         self.graphql_endpoint: str = f'{self.url}/graphql'
