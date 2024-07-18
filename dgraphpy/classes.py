@@ -48,15 +48,18 @@ class Endpoint:
 
 class Schema:
     class SchemaAttribute:
-        def __init__(self, name: str, attr_type: str, nullable: bool = True, directive: str = None):
+        def __init__(self, name: str, attr_type: str, nullable: bool = True, directive: str = None,
+                     comment: str = None):
             self.name: str = name
             self.attr_type: str = attr_type
             self.nullable: bool = nullable
             self.directive: str = directive
+            self.comment: str = comment
 
             nullable_text: str = "!" if self.nullable else ""
-            directive_text: str = f' @{self.directive}' if self.directive else ''
-            self.text: str = f'{self.name}: {self.attr_type}{nullable_text}{directive_text}'
+            directive_text: str = f' @{self.directive}' if self.directive is not None else ''
+            comment_text: str = f' # {self.comment}' if self.comment is not None else ''
+            self.text: str = f'{self.name}: {self.attr_type}{nullable_text}{directive_text}{comment_text}'
 
         @staticmethod
         def remove_trailing_comment(text: str) -> str:
@@ -74,6 +77,7 @@ class Schema:
         @classmethod
         def from_text(cls, text) -> Schema.SchemaAttribute:
             chunks: list[str] = [chunk.strip() for chunk in text.split(':')]
+            comment: str = text.split('#')[-1] if '#' in text else None
 
             name: str = chunks[0].replace(',', '')
 
@@ -86,12 +90,16 @@ class Schema:
             else:
                 directive = None
 
-            attr: Schema.SchemaAttribute = cls(name, attr_type, can_be_null, directive)
+            attr: Schema.SchemaAttribute = cls(name, attr_type, can_be_null, directive, comment)
             return attr
 
-    class SchemaType:
-        def __init__(self, name: str, attributes: list[Schema.SchemaAttribute]):
+    class SchemaItem:
+        def __init__(self, name: str):
             self.name: str = name
+
+    class SchemaType(SchemaItem):
+        def __init__(self, name: str, attributes: list[Schema.SchemaAttribute]):
+            super().__init__(name)
             self.attributes: list[Schema.SchemaAttribute] = attributes
 
         def __repr__(self):
@@ -100,6 +108,14 @@ class Schema:
 
         @classmethod
         def from_text(cls, text: str) -> Schema.SchemaType:
+            """
+            Build a SchemaType object from its schema text representation.
+
+            :param text: Schema text representation of the SchemaType.
+            :type text: str
+            :return: SchemaType object matching the text.
+            :rtype: SchemaType
+            """
             chunks: list[str] = [chunk.strip() for chunk in text.split('\n')
                                  if not (chunk == '' or chunk.strip().startswith('#'))]
 
@@ -111,9 +127,9 @@ class Schema:
             schema_type = cls(name, attribute_objs)
             return schema_type
 
-    class SchemaEnum:
+    class SchemaEnum(SchemaItem):
         def __init__(self, name: str, options: list[str]):
-            self.name: str = name
+            super().__init__(name)
             self.options: list[str] = options
 
         def __repr__(self):
@@ -122,6 +138,14 @@ class Schema:
 
         @classmethod
         def from_text(cls, text: str) -> Schema.SchemaEnum:
+            """
+            Build a SchemaEnum object from its schema text representation.
+
+            :param text: Schema text representation of the SchemaEnum.
+            :type text: str
+            :return: SchemaEnum object matching the text.
+            :rtype: SchemaEnum
+            """
             item_chunks: list[str] = [chunk.strip() for chunk in text.split('{')]
             item_chunks = Schema.remove_comment_lines(item_chunks, True)
 
@@ -132,6 +156,62 @@ class Schema:
 
             enum: Schema.SchemaEnum = cls(name, options)
             return enum
+
+    class SchemaInterface(SchemaItem):
+        def __init__(self, name: str, attributes: list[Schema.SchemaAttribute]):
+            super().__init__(name)
+            self.attributes: list[Schema.SchemaAttribute] = attributes
+
+        def __repr__(self):
+            attrs_text: str = "\n".join([f'\t- {attr.text}' for attr in self.attributes])
+            return f'SchemaInterface called "{self.name}" with attributes:\n{attrs_text}'
+
+        @classmethod
+        def from_text(cls, text: str):
+            """
+            Build a SchemaInterface object from its schema text representation.
+
+            :param text: Schema text representation of the SchemaInterface.
+            :type text: str
+            :return: SchemaInterface object matching the text.
+            :rtype: SchemaInterface
+            """
+            chunks: list[str] = [chunk.strip() for chunk in text.split('\n')
+                                 if not (chunk == '' or chunk.strip().startswith('#'))]
+
+            name: str = chunks[0].replace('interface ', '').split(' ')[0]  # remove "type " then get first word
+            attributes = [chunk for chunk in chunks[1:] if chunk not in ['{', '}']]
+            attribute_objs: list[Schema.SchemaAttribute] = [Schema.SchemaAttribute.from_text(line)
+                                                            for line in attributes]
+
+            interface = cls(name, attribute_objs)
+            return interface
+
+    class SchemaUnion(SchemaItem):
+        def __init__(self, name: str, contents: list[str]):
+            super().__init__(name)
+            self.contents: list[str] = contents
+
+        def __repr__(self):
+            contents_text: str = "\n".join([f'\t- {content}' for content in self.contents])
+            return f'SchemaUnion called "{self.name}" with contents:\n{contents_text}'
+
+        @classmethod
+        def from_text(cls, text: str) -> Schema.SchemaUnion:
+            """
+            Build a SchemaUnion object from its schema text representation.
+
+            :param text: Schema text representation of the SchemaUnion.
+            :type text: str
+            :return: SchemaUnion object matching the text.
+            :rtype: SchemaUnion
+            """
+            name_contents: list[str] = text.split('=')
+            name: str = name_contents[0].replace('union', '').strip()
+            contents: list[str] = [item.strip() for item in name_contents[1].strip().split('|')]
+
+            union = cls(name, contents)
+            return union
 
     def __init__(self, schema_text: str):
         self.text: str = schema_text
@@ -152,29 +232,47 @@ class Schema:
         if schema_chunks is None:
             self.input_schema: str = self.text
 
-        # Attributes for storing data about the data in the schema text
-        self.types = self.get_types()
+        # Attributes about the data structures represented in the schema text
+        # TODO replace the implementations of the below with appropriate SchemaQuerys (once that class fixed)
+        self.all_types: list[Schema.SchemaItem] = self.get_types()
+        self.all_names: list[str] = [item.name for item in self.all_types]
 
-    def get_types(self) -> list:
+        self.types = [item for item in self.types if isinstance(item, Schema.SchemaType)]
+        self.type_names: list[str] = [item.name for item in self.types]
+
+        self.enums = [item for item in self.types if isinstance(item, Schema.SchemaEnum)]
+        self.enum_names: list[str] = [item.name for item in self.enums]
+
+        self.interfaces = [item for item in self.types if isinstance(item, Schema.SchemaInterface)]
+        self.interface_names: list[str] = [item.name for item in self.interfaces]
+
+        self.unions = [item for item in self.types if isinstance(item, Schema.SchemaUnion)]
+        self.union_names: list[str] = [item.name for item in self.unions]
+
+    def get_types(self) -> list[Schema.SchemaItem]:
         """
         Get a list of the types within the schema.
 
         :return: List of SchemaType objects representing each type entry in the schema.
         :rtype: SchemaType
         """
-        types: list = self.input_schema.split('}\n')
-        types = self.remove_comment_lines(types)
+        types: list[str] = self.text_to_chunks(self.input_schema)
+        types = self.remove_comment_lines(types, remove_blank_lines=True)
 
-        type_objs: list[Schema.SchemaType | Schema.SchemaEnum] = []
+        type_objs: list[Schema.SchemaItem] = []
         for item in types:
             if item.startswith('type'):
                 type_objs.append(Schema.SchemaType.from_text(item))
             elif item.startswith('enum'):
                 type_objs.append(Schema.SchemaEnum.from_text(item))
+            elif item.startswith('interface'):
+                type_objs.append(Schema.SchemaInterface.from_text(item))
+            elif item.startswith('union'):
+                type_objs.append(Schema.SchemaUnion.from_text(item))
             else:
                 raise AttributeError(f'Item in schema not recognised as type or enum:\n{item}')
 
-        self.types: list[Schema.SchemaType | Schema.SchemaEnum] = type_objs  # update schema's classes attribute
+        self.types: list[Schema.SchemaItem] = type_objs  # update schema's classes attribute
         return self.types
 
     @classmethod
@@ -206,6 +304,33 @@ class Schema:
         if remove_blank_lines:
             new_lines = [line for line in new_lines if line != '']
         return new_lines
+
+    def text_to_chunks(self, text: str) -> list[str]:
+        """
+        Converts a schema's text into a list of chunk strings each representing a schema entry.
+
+        :param text: Schema text.
+        :type text: str
+        :return: Chunks where each chunk represents a schema entry.
+        :rtype: list[str]
+        """
+        # Split into lines and remove whitespace from each line
+        lines: list[str] = [item.strip() for item in text.split('\n')]
+
+        # Unlike the other three types, unions do not end with '}', so cannot use the split('}\n') check below
+        unions: list[str] = [line for line in lines if line.startswith('union')]
+        # remove unions from lines - will be recombined into types list later
+        new_lines = [line for line in lines if line not in unions]
+
+        # Remove comment lines and recombine to enable splitting into chunks with split('}\n')
+        text: str = '\n'.join(self.remove_comment_lines(new_lines))
+
+        # Split into list of non-empty chunks, with each chunk representing a type/enum/interface/union
+        types: list = [item.strip() for item in text.split('}\n') if item != '']
+        types.extend(unions)  # add unions to end of list
+        # FIXME: position of unions in original schema text is not conserved - they are added to the end of types list
+
+        return types
 
 
 class GraphQLOperation:
