@@ -160,8 +160,8 @@ class Schema:
         :return: List of SchemaType objects representing each type entry in the schema.
         :rtype: SchemaType
         """
-        types: list = self.input_schema.split('}\n')
-        types = self.remove_comment_lines(types)
+        types: list = [item.strip() for item in self.input_schema.split('}\n')]
+        types = self.remove_comment_lines(types, remove_blank_lines=True)
 
         type_objs: list[Schema.SchemaType | Schema.SchemaEnum] = []
         for item in types:
