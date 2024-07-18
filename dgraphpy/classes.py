@@ -231,6 +231,7 @@ class Schema:
             self.input_schema: str = self.text
 
         # Attributes about the data structures represented in the schema text
+        # TODO replace the implementations of the below with appropriate SchemaQuerys (once that class fixed)
         self.all_types: list[Schema.SchemaItem] = self.get_types()
         self.all_names: list[str] = [item.name for item in self.all_types]
 
