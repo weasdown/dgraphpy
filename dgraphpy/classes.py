@@ -425,14 +425,18 @@ class Mutation(GraphQLOperation):
 
 
 class SchemaQuery(GraphQLOperation):
-    def __init__(self, return_fields: list = None, predicates: list[str] = None, generated_schema: bool = False):
+    def __init__(self, return_fields: list = None, arguments: dict = None, generated_schema: bool = False):
         return_fields = [''] if return_fields is None else return_fields
-        predicates: dict = {'pred': predicates} if predicates is not None else None
-        super().__init__('schema', return_fields, arguments=predicates)
+        arguments: dict = arguments if arguments is not None else None
+        super().__init__('schema', return_fields, arguments=arguments)
 
         return_fields_text: str | None = '{' + ' '.join(return_fields) + '}' if return_fields is not None else ''
-        self.text = ('{ getGQLSchema { ' + ('generatedSchema' if generated_schema else 'schema')
-                     + return_fields_text + ' } }')
+
+        # # Text for query via POST request
+        # self.text: str = ('{ getGQLSchema { ' + ('generatedSchema' if generated_schema else 'schema')
+        #              + return_fields_text + ' } }')
+        arguments_text: str = f''  # FIXME
+        self.text: str = """schema {}"""
         # FIXME Fix parsing of return fields etc into valid query string
 
         # self.text: str = 'schema {' + '\n'.join(return_fields) + '}'  # TODO remove
