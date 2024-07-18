@@ -430,9 +430,12 @@ class SchemaQuery(GraphQLOperation):
         predicates: dict = {'pred': predicates} if predicates is not None else None
         super().__init__('schema', return_fields, arguments=predicates)
 
-        self.text = '{ getGQLSchema { ' + ('generatedSchema' if generated_schema else 'schema') + ' } }'
+        return_fields_text: str | None = '{' + ' '.join(return_fields) + '}' if return_fields is not None else ''
+        self.text = ('{ getGQLSchema { ' + ('generatedSchema' if generated_schema else 'schema')
+                     + return_fields_text + ' } }')
+        # FIXME Fix parsing of return fields etc into valid query string
 
-        # self.text: str = 'schema {' + '\n'.join(return_fields) + '}'  # FIXME
+        # self.text: str = 'schema {' + '\n'.join(return_fields) + '}'  # TODO remove
         self.headers: dict = Server.headers
 
         # Load X-Auth-Token API token from .env in same directory as this file
