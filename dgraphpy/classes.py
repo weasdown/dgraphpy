@@ -295,7 +295,7 @@ class Schema:
         schema_text: str = schema_data.get('generatedSchema').replace('\u2010', '-') if 'generatedSchema' in query.text\
             else schema_data.get('schema')
 
-        schema = cls(schema_text)  # make a Schema obejct from the schema_text
+        schema = cls(schema_text)  # make a Schema object from the schema_text
         return schema
 
     @staticmethod
